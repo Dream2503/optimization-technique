@@ -20,7 +20,20 @@ int main() {
 
     std::cout << matrix.inverse();
 
+    const Graph graph;
     Variable v = (Variable("x") ^ 1) * (Variable("y") ^ -1);
-    std::cout << v;
+    std::cout << v << std::endl;
+    Variable x("x");
+    std::cout << (x + 1) * (x + 2) << std::endl;
+    graph.plot({
+        x,
+        x + 2,
+        2 * x - 5,
+    });
+
+    Variable y("y");
+    Inequation inequation = 5 * x + 2 * y - 7 <= 5;
+    Inequation res = inequation.solve_for(y);
+    std::cout << res;
     return 0;
 }

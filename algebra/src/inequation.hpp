@@ -68,6 +68,30 @@ public:
         return res;
     }
 
+    Inequation solve_for(const Variable& variable) const {
+        Inequation res;
+        res.opr = opr;
+
+        for (const Variable& var : lhs.expression) {
+            if (var.basis() == variable) {
+                res.lhs += var;
+            } else {
+                res.rhs += -var;
+            }
+        }
+        for (const Variable& var : rhs.expression) {
+            if (var.basis() == variable) {
+                res.lhs += -var;
+            } else {
+                res.rhs += var;
+            }
+        }
+        if (res.lhs.is_variable()) {
+            res /= static_cast<Variable>(res.lhs).coefficient;
+        }
+        return res;
+    }
+
     bool is_bool() const { return lhs.is_fraction() && rhs.is_fraction(); }
 
     explicit operator bool() const { return detail::evaluate_relational_operator(static_cast<Fraction>(lhs), opr, static_cast<Fraction>(rhs)); }

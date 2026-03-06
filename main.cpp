@@ -29,13 +29,13 @@ void test(LPP&& lpp, const std::string& method = "simplex", const Variable& var 
 
         if (method.ends_with("add") || method.ends_with("remove")) {
             out << "BEFORE:" << std::endl << computational_table;
+
             if (method.ends_with("add")) {
                 computational_table.add_variable(var, coefficients);
             } else {
                 computational_table.remove_variable(var);
             }
             out << "AFTER:" << std::endl << computational_table;
-            computational_table.optimize_simplex(true, out);
             const std::variant<std::vector<std::map<Variable, Fraction>>, std::string> res = computational_table.get_solutions("simplex", true, out);
 
             if (auto ans = std::get_if<std::vector<std::map<Variable, Fraction>>>(&res)) {
@@ -56,17 +56,66 @@ void test(LPP&& lpp, const std::string& method = "simplex", const Variable& var 
     } else {
         out << lpp << std::endl << "Dual:" << std::endl << lpp.dual(method);
     }
-    out << std::endl << std::endl;
+    out << std::string(150, '-') << std::endl;
 }
 
-void test(std::vector<std::map<Variable, Fraction>>&& res) {
-    for (const std::map<Variable, Fraction>& result : res) {
+void test(std::vector<Equation>&& equations) {
+    for (const Equation& equation : equations) {
+        out << equation << std::endl;
+    }
+    out << std::endl << "Basic Feasible Solutions:" << std::endl;
+
+    for (const std::map<Variable, Fraction>& result : basic_feasible_solutions(equations)) {
         for (const auto& [variable, fraction] : result) {
             out << variable << '=' << fraction << ' ';
         }
         out << std::endl;
     }
-    out << std::endl << std::endl;
+    out << std::string(150, '-') << std::endl;
+}
+
+void test(ComputationalTable&& computational_table, const std::string& method = "simplex", const Variable& var = {},
+          const Inequation& constraint = {}, const Matrix<Fraction>& coefficients = {}) {
+    computational_table.optimize_simplex(true, out);
+    out << computational_table;
+
+    if (method.starts_with("Var")) {
+        if (method.ends_with("add") || method.ends_with("remove")) {
+            out << "BEFORE:" << std::endl << computational_table;
+
+            if (method.ends_with("add")) {
+                computational_table.add_variable(var, coefficients);
+            } else {
+                computational_table.remove_variable(var);
+            }
+            out << "AFTER:" << std::endl << computational_table;
+            const std::variant<std::vector<std::map<Variable, Fraction>>, std::string> res = computational_table.get_solutions("simplex", true, out);
+
+            if (auto ans = std::get_if<std::vector<std::map<Variable, Fraction>>>(&res)) {
+                for (const std::map<Variable, Fraction>& i : *ans) {
+                    for (const auto& [variable, fraction] : i) {
+                        out << variable << '=' << fraction << " ";
+                    }
+                    out << std::endl;
+                }
+            } else {
+                out << std::get<std::string>(res);
+            }
+        } else {
+            for (const Interval& interval : method.ends_with('C') ? computational_table.variation_C() : computational_table.variation_B()) {
+                out << interval << std::endl;
+            }
+        }
+    } else if (method.starts_with("Constraint")) {
+        out << "BEFORE:" << std::endl << computational_table;
+
+        if (method.ends_with("add")) {
+            computational_table.add_constraint(constraint);
+        } else {
+        }
+        out << "AFTER:" << std::endl << computational_table;
+    }
+    out << std::string(150, '-') << std::endl;
 }
 
 int main() {
@@ -147,14 +196,14 @@ int main() {
              },
              {x1 >= 0, x2 >= 0, x3 >= 0}));
     // BFS
-    test(basic_feasible_solutions({
+    test({
         x1 + 2 * x2 + x3 == 4,
         2 * x1 + x2 + 5 * x3 == 5,
-    }));
-    test(basic_feasible_solutions({
+    });
+    test({
         2 * x1 + x2 - x3 == 2,
         3 * x1 + 2 * x2 + x3 == 3,
-    }));
+    });
     test(LPP(Optimization::MAXIMIZE, 2 * x1 + 3 * x2 + 10 * x3,
              {
                  x1 + 2 * x3 == 0,
@@ -189,11 +238,11 @@ int main() {
                  4 * x + 3 * y <= 6,
              },
              {x >= 0, y >= 0}));
-    test(basic_feasible_solutions({
+    test({
         x + 2 * y - z == 3,
         3 * x - y + 2 * z == 4,
         2 * x + 3 * y - 5 * z == 7,
-    }));
+    });
     test(LPP(Optimization::MAXIMIZE, x1 + 2 * x2 + x3,
              {
                  2 * x1 + x2 - x3 >= -2,
@@ -328,7 +377,27 @@ int main() {
                  3 * x <= 180,
                  5 * y <= 200,
              },
-             {x >= 0, y >= 0}));
+             {x >= 0, y >= 0}),
+         "Var B");
+    test(ComputationalTable(
+             {
+                 {x, Variable(2)},
+                 {y, Variable(3)},
+                 {z, Variable(1)},
+                 {s1, Variable()},
+                 {s2, Variable()},
+             },
+             {x, y},
+             {
+                 {LPP::B, {1, 2}},
+                 {x, {1, 0}},
+                 {y, {0, 1}},
+                 {z, {-1, 2}},
+                 {s1, {4, -1}},
+                 {s2, {-1, 1}},
+             },
+             Solution::OPTIMIZED, LPP{Optimization::MAXIMIZE, {}, {x <= 3, x <= 7}, {}}),
+         "Var B");
     // Addition of new variable
     test(LPP(Optimization::MAXIMIZE, 3 * x + 5 * y,
              {
@@ -352,6 +421,82 @@ int main() {
              },
              {x >= 0, y >= 0}),
          "Var remove", y);
+    test(ComputationalTable(
+             {
+                 {x1, Variable(2)},
+                 {x2, Variable(4)},
+                 {x3, Variable(1)},
+                 {x4, Variable(3)},
+                 {x5, Variable(2)},
+                 {s1, Variable()},
+                 {s2, Variable()},
+                 {s3, Variable()},
+             },
+             {x1, x2, x3},
+             {
+                 {LPP::B, {3, 1, 7}},
+                 {x1, {1, 0, 0}},
+                 {x2, {0, 1, 0}},
+                 {x3, {0, 0, 1}},
+                 {x4, {-1, 2, -1}},
+                 {x5, {0, 1, -2}},
+                 {s1, {Fraction(1, 2), -1, 5}},
+                 {s2, {Fraction(1, 5), 0, Fraction(-3, 10)}},
+                 {s3, {-1, Fraction(1, 2), 2}},
+             },
+             Solution::OPTIMIZED),
+         "Var remove", x2);
+    test(ComputationalTable(
+             {
+                 {x1, Variable(2)},
+                 {x2, Variable(4)},
+                 {x3, Variable(1)},
+                 {x4, Variable(3)},
+                 {x5, Variable(2)},
+                 {s1, Variable()},
+                 {s2, Variable()},
+                 {s3, Variable()},
+             },
+             {x1, x2, x3},
+             {
+                 {LPP::B, {3, 1, 7}},
+                 {x1, {1, 0, 0}},
+                 {x2, {0, 1, 0}},
+                 {x3, {0, 0, 1}},
+                 {x4, {-1, 2, -1}},
+                 {x5, {0, 1, -2}},
+                 {s1, {Fraction(1, 2), -1, 5}},
+                 {s2, {Fraction(-1, 5), 0, Fraction(-2, 5)}},
+                 {s3, {-1, Fraction(1, 2), 2}},
+             },
+             Solution::OPTIMIZED, {}),
+         "Constraint add", {}, 2 * x1 + 3 * x2 - x3 + 2 * x4 + 4 * x5 <= 5);
+    test(ComputationalTable(
+             {
+                 {x1, Variable(2)},
+                 {x2, Variable(4)},
+                 {x3, Variable(1)},
+                 {x4, Variable(3)},
+                 {x5, Variable(2)},
+                 {s1, Variable()},
+                 {s2, Variable()},
+                 {s3, Variable()},
+             },
+             {x1, x2, x3},
+             {
+                 {LPP::B, {3, 1, 7}},
+                 {x1, {1, 0, 0}},
+                 {x2, {0, 1, 0}},
+                 {x3, {0, 0, 1}},
+                 {x4, {-1, 2, -1}},
+                 {x5, {0, 1, -2}},
+                 {s1, {Fraction(1, 2), -1, 5}},
+                 {s2, {Fraction(-1, 5), 0, Fraction(-2, 5)}},
+                 {s3, {-1, Fraction(1, 2), 2}},
+             },
+             Solution::OPTIMIZED, {}),
+         "Constraint add", {}, 3 * x1 + x2 + 2 * x3 + x4 + 9 * x5 <= 19);
+    /*
     // Mid Term Examination
     test(LPP(Optimization::MAXIMIZE, 3 * x - 5 * y,
              {
@@ -407,8 +552,6 @@ int main() {
              },
              {x >= 0, y >= 0}),
          "Var C");
-    // ComputationalTable table(std::map<Variable, Variable>{{x1, 2}, {x2, 4}, {x3, 1}, {x4, 3}, {x5, 2}, {s1, 0}, {s2, 0}, {s3, 0}},
-    //     {x1, x2, x3},
-    //     {{}});
+    */
     return 0;
 }

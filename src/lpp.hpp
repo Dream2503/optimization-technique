@@ -1,7 +1,6 @@
 #pragma once
 
 class lpp::LPP {
-    inline static const Variable B{"@"}, M{"M"}, Z{"Z"}; // '@' for ascii arrangement
     Optimization type;
     Polynomial objective;
     std::vector<Inequation> constraints, restrictions;
@@ -10,6 +9,8 @@ class lpp::LPP {
     friend std::vector<std::map<Variable, Fraction>> lpp::basic_feasible_solutions(const std::vector<Equation>&);
 
 public:
+    inline static const Variable B{"@"}, M{"M"}, Z{"Z"}; // '@' for ascii arrangement
+
     static Inequation unrestrict(const Variable& variable) { return Inequation(variable, {}, inf); }
 
     LPP() = default;

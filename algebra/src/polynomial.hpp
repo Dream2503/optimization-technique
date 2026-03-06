@@ -45,9 +45,8 @@ public:
 
                 if (itr->coefficient == 0) {
                     expression.erase(itr);
-                    *this += 0;
                 }
-            } else {
+            } else if (variable.coefficient != 0) {
                 expression.insert(itr, variable);
             }
         }
@@ -60,7 +59,7 @@ public:
         return res;
     }
 
-    Polynomial operator-=(const Fraction& value) { return *this += -value; }
+    Polynomial& operator-=(const Fraction& value) { return *this += -value; }
 
     Polynomial operator-(const Fraction& value) const { return *this + -value; }
 
@@ -80,18 +79,16 @@ public:
 
     Polynomial operator*(const Variable& value) const { return *this * Polynomial(value); }
 
-    Polynomial& operator*=(const Polynomial& value) {
-        for (Variable& lhs : expression) {
-            for (const Variable& rhs : value.expression) {
-                lhs *= rhs;
-            }
-        }
-        return *this;
-    }
+    Polynomial& operator*=(const Polynomial& value) { return *this = *this * value; }
 
     Polynomial operator*(const Polynomial& value) const {
-        Polynomial res = *this;
-        res *= value;
+        Polynomial res;
+
+        for (const Variable& lhs : expression) {
+            for (const Variable& rhs : value.expression) {
+                res += lhs * rhs;
+            }
+        }
         return res;
     }
 
@@ -113,22 +110,31 @@ public:
     }
 
     Polynomial substitute(const std::vector<std::pair<std::string, Fraction>>& values) const {
-        Polynomial res = *this;
+        Polynomial res;
 
-        for (Variable& variable : res.expression) {
-            variable = variable.substitute(values);
+        for (const Variable& variable : expression) {
+            res += variable.substitute(values);
         }
         return res;
     }
 
-    bool is_fraction() const { return is_variable() && expression[0].is_fraction(); };
+    bool is_fraction() const { return expression.empty() || expression.size() == 1 && expression.front().is_fraction(); }
 
     bool is_variable() const { return expression.size() == 1; }
 
-    explicit operator Fraction() const { return static_cast<Fraction>(static_cast<Variable>(*this)); }
+    explicit operator Fraction() const {
+        assert(is_fraction());
+
+        if (expression.empty()) {
+            return Fraction(0);
+        }
+        return static_cast<Fraction>(static_cast<Variable>(*this));
+    }
 
     explicit operator Variable() const {
         assert(is_variable());
+
+
         return expression[0];
     }
 };
@@ -163,8 +169,9 @@ namespace std {
             for (const algebra::Variable& variable : polynomial.expression | std::views::drop(1)) {
                 res.append(variable.coefficient < 0 ? " - " : " + ").append(to_string(abs(variable)));
             }
+            return res;
         }
-        return res;
+        return "0";
     }
 } // namespace std
 

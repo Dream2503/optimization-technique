@@ -29,6 +29,10 @@ namespace algebra {
 
     template <typename>
     class Matrix;
+    template <typename T>
+    std::ostream& operator<<(std::ostream&, const Matrix<T>&);
+
+    class Graph;
 
     namespace detail {
         RelationalOperator invert_relational_operator(RelationalOperator);
@@ -65,3 +69,4 @@ namespace std {
 #include "src/inequation.hpp"
 #include "src/interval.hpp"
 #include "src/matrix.hpp"
+#include "src/graph.hpp"
