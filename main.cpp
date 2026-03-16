@@ -572,7 +572,7 @@ int main() {
     test(IPP(Optimization::MAXIMIZE, 2 * x + 3 * y,
              {
                  6 * x + 5 * y <= 12,
-                 4 * x + 2 * y >= 14,
+                 4 * x + 3 * y <= 14,
              },
              {x >= 0, y >= 0}),
          "outputs/ipp3");

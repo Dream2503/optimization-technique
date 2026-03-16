@@ -98,6 +98,7 @@ public:
         }
         std::ranges::sort(points);
         points.erase(std::ranges::unique(points).begin(), points.end());
+        erase_if(points, [](const algebra::Point& point) -> bool { return point.x < 0 || point.y < 0; });
 
         for (const algebra::Point& point : points) {
             std::vector<std::pair<std::string, algebra::Fraction>> substituent = {{"x", point.x}, {"y", point.y}};

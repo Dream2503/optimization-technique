@@ -6,7 +6,7 @@
 #include "linear-algebra/linalg.hpp"
 
 namespace optimization {
-    inline algebra::FormatSettings GLOBAL_FORMATTING;
+    inline algebra::detail::FormatSettings GLOBAL_FORMATTING;
 
     enum class Optimization : bool { MINIMIZE, MAXIMIZE };
     enum class Solution : uint8_t { UNOPTIMIZED, OPTIMIZED, INFEASIBLE, UNBOUNDED, ALTERNATE };
