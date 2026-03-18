@@ -1,15 +1,10 @@
 #pragma once
 
 class optimization::LPP {
-protected:
+public:
     Optimization type;
     algebra::Polynomial objective;
     std::vector<algebra::Inequation> constraints, restrictions;
-
-    friend class ComputationalTable;
-    friend std::vector<std::map<algebra::Variable, algebra::Fraction>> optimization::basic_feasible_solutions(const std::vector<algebra::Equation>&);
-
-public:
     inline static const algebra::Variable B{"@"}, M{"M"}, Z{"Z"}; // '@' for ascii arrangement
 
     static algebra::Inequation unrestrict(const algebra::Variable& variable) { return algebra::Inequation(variable, {}, algebra::inf); }
@@ -101,7 +96,8 @@ public:
         erase_if(points, [](const algebra::Point& point) -> bool { return point.x < 0 || point.y < 0; });
 
         for (const algebra::Point& point : points) {
-            std::vector<std::pair<std::string, algebra::Fraction>> substituent = {{"x", point.x}, {"y", point.y}};
+            std::vector<std::pair<algebra::Variable, algebra::Fraction>> substituent = {{algebra::Variable("x"), point.x},
+                                                                                        {algebra::Variable("y"), point.y}};
 
             if (point.x >= 0 && point.y >= 0) {
                 limit = std::max({limit, point.x, point.y});
@@ -122,13 +118,6 @@ public:
                 }
             }
         }
-        GLOBAL_FORMATTING << "Critical points: ";
-
-        for (const algebra::Point& point : points) {
-            GLOBAL_FORMATTING << point << ' ';
-        }
-        GLOBAL_FORMATTING << std::endl;
-
         if (graph.plot(constraints, points, limit, path) && type == Optimization::MAXIMIZE) {
             GLOBAL_FORMATTING << "Unbounded Solution" << std::endl;
             return Solution::UNBOUNDED;
@@ -141,38 +130,67 @@ public:
             GLOBAL_FORMATTING << "Infinitely Many Solutions" << std::endl;
             return Solution::ALTERNATE;
         }
-        GLOBAL_FORMATTING << Z << '=' << optimal << " x=" << res.x << " y=" << res.y << std::endl;
+        GLOBAL_FORMATTING << (Z == optimal) << (algebra::Variable("x") == res.x) << (algebra::Variable("y") == res.y) << std::endl;
         return std::map{std::pair{Z, optimal}, {algebra::Variable("x"), res.x}, {algebra::Variable("y"), res.y}};
+    }
+
+    std::string to_latex() const {
+        const int size = restrictions.size();
+        std::string res("\\text{");
+        res.append(type == Optimization::MAXIMIZE ? "Maximize" : "Minimize")
+            .append("} \\quad & ")
+            .append(objective.to_latex())
+            .append("\\\\\n\\text{subject to} \\quad\n");
+
+        for (const algebra::Inequation& constraint : constraints) {
+            res.append("& ").append(constraint.to_latex()).append("\\\\\n");
+        }
+        res.append("& ");
+
+        for (int i = 0; i < size; i++) {
+            if (static_cast<algebra::Fraction>(restrictions[i].rhs) == algebra::inf) {
+                res.append(restrictions[i].lhs.to_latex()).append("\\text{ is unrestricted}");
+            } else {
+                res.append(restrictions[i].to_latex());
+            }
+            if (i < size - 1) {
+                res.append(",\\; ");
+            }
+        }
+        return res;
     }
 
     ComputationalTable tabular_optimize(const std::string& = "simplex") const;
 
     LPP dual(const std::string& = "w") const;
+};
 
-    friend std::ostream& operator<<(std::ostream& out, const LPP& lpp) {
+namespace std {
+    inline string to_string(const optimization::LPP& lpp) {
         const int size = lpp.restrictions.size();
-        out << (lpp.type == Optimization::MAXIMIZE ? "Maximize" : "Minimize") << '\t' << lpp.objective << std::endl;
-        out << "subject to  " << lpp.constraints.front() << std::endl;
+        string res(lpp.type == optimization::Optimization::MAXIMIZE ? "Maximize\t" : "Minimize\t");
+        res.append(to_string(lpp.objective)).append("\nsubject to  ").append(to_string(lpp.constraints.front())).push_back('\n');
 
         for (const algebra::Inequation& constraint : lpp.constraints | std::views::drop(1)) {
-            out << "            " << constraint << std::endl;
+            res.append("            ").append(to_string(constraint)).push_back('\n');
         }
-        out << "            ";
+        res.append("            ");
 
         for (int i = 0; i < size; i++) {
-            if (lpp.restrictions[i].lhs.is_fraction() && static_cast<algebra::Fraction>(lpp.restrictions[i].lhs) == algebra::inf ||
-                lpp.restrictions[i].rhs.is_fraction() && static_cast<algebra::Fraction>(lpp.restrictions[i].rhs) == algebra::inf) {
-                out << lpp.restrictions[i].lhs << " is unrestricted";
+            if (static_cast<algebra::Fraction>(lpp.restrictions[i].rhs) == algebra::inf) {
+                res.append(to_string(lpp.restrictions[i].lhs)).append(" is unrestricted");
             } else {
-                out << lpp.restrictions[i];
+                res.append(to_string(lpp.restrictions[i]));
             }
             if (i < size - 1) {
-                out << ", ";
+                res.append(", ");
             }
         }
-        return out << std::endl;
+        return res.append("\n");
     }
-};
+} // namespace std
+
+inline std::ostream& optimization::operator<<(std::ostream& out, const LPP& lpp) { return out << std::to_string(lpp); }
 
 inline std::vector<std::map<algebra::Variable, algebra::Fraction>>
 optimization::basic_feasible_solutions(const std::vector<algebra::Equation>& equations) {
@@ -217,7 +235,7 @@ optimization::basic_feasible_solutions(const std::vector<algebra::Equation>& equ
 
     for (const auto& res : result) {
         for (const auto& [variable, fraction] : res) {
-            GLOBAL_FORMATTING << variable << '=' << fraction << ' ';
+            GLOBAL_FORMATTING << algebra::Equation(variable, fraction) << "  ";
         }
         GLOBAL_FORMATTING << std::endl;
     }

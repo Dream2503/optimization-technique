@@ -32,6 +32,7 @@ public:
     std::map<algebra::Variable, std::vector<algebra::Fraction>> coefficient_matrix;
     std::vector<algebra::Polynomial> zj_cj;
     std::vector<algebra::Fraction> mr;
+    static constexpr int TAB_SIZE = 13;
 
     explicit ComputationalTable(const LPP& lpp) : lpp(lpp), solution(Solution::UNOPTIMIZED) {
         const int size = lpp.constraints.size();
@@ -123,8 +124,9 @@ public:
 
                     if (!std::ranges::contains(res, sol)) {
                         res.push_back(sol);
+                    } else {
+                        loop = false;
                     }
-                    loop = false;
                     break;
                 }
 
@@ -134,7 +136,7 @@ public:
         }
         for (const std::map<algebra::Variable, algebra::Fraction>& sol : res) {
             for (const auto& [variable, fraction] : sol) {
-                GLOBAL_FORMATTING << variable << '=' << fraction << " ";
+                GLOBAL_FORMATTING << algebra::Equation(variable, fraction) << "  ";
             }
             GLOBAL_FORMATTING << std::endl;
         }
@@ -417,14 +419,14 @@ public:
     }
 
     void add_constraint(const algebra::Inequation& inequation) {
-        std::vector<std::pair<std::string, algebra::Fraction>> substituent;
+        std::vector<std::pair<algebra::Variable, algebra::Fraction>> substituent;
         const std::map<algebra::Variable, algebra::Fraction> temp =
             std::get<std::vector<std::map<algebra::Variable, algebra::Fraction>>>(get_solutions())[0];
         substituent.reserve(cost.size());
         GLOBAL_FORMATTING << *this;
 
         for (const auto& [key, value] : temp) {
-            substituent.emplace_back(key.variables[0].name, value);
+            substituent.emplace_back(key, value);
         }
         if (static_cast<bool>(inequation.substitute(substituent))) {
             return;
@@ -471,73 +473,121 @@ public:
         GLOBAL_FORMATTING << *this;
     }
 
-    friend std::ostream& operator<<(std::ostream& out, const ComputationalTable& computational_table) {
-        static constexpr int TAB_SIZE = 13;
-        const int size = computational_table.basis_vector.size(), columns = 3 + computational_table.coefficient_matrix.size();
-        auto print_partition = [columns, &out] -> void {
-            out << std::right << std::setfill('-') << '+';
+    std::string to_latex() const {
+        const int size = basis_vector.size(), columns = 3 + coefficient_matrix.size();
+        std::string res("\\begin{array}{");
 
-            for (int i = 0; i < columns; i++) {
-                out << std::setw(TAB_SIZE) << "" << '+';
-            }
-            out << std::endl << std::left << std::setfill(' ');
-        };
-        auto format = [](const auto& value) -> std::string {
-            const std::string res = std::to_string(value);
-            const int remaining = TAB_SIZE - res.size();
-            return std::string(remaining / 2, ' ') + res + std::string(remaining - remaining / 2, ' ');
-        };
-        out << std::left << ' ';
+        for (int i = 0; i < columns; i++) {
+            res.append("c|");
+        }
+        res.pop_back();
+        res.append("}\n &  &  & ");
 
-        for (int i = 0; i < 3; i++) {
-            out << std::setw(TAB_SIZE) << "" << ' ';
+        for (const algebra::Variable& variable : coefficient_matrix | std::views::drop(1) | std::views::keys) { // B
+            res.append(cost.at(variable).to_latex()).append(" & ");
         }
-        for (const algebra::Variable& variable : computational_table.coefficient_matrix | std::views::drop(1) | std::views::keys) { // B
-            out << format(computational_table.cost.at(variable)) << ' ';
-        }
-        out << std::endl;
-        print_partition();
-        out << '|';
+        res.append("\\\\\n\\hline\n");
 
-        for (const std::string string : {"BV", "C", "B"}) {
-            out << format(string) << '|';
+        for (const char* str : {"BV", "C", "B"}) {
+            res.append("\\text{").append(str).append("} & ");
         }
-        for (const algebra::Variable& variable : computational_table.coefficient_matrix | std::views::drop(1) | std::views::keys) { // B
-            out << format(variable.variables[0].name) << '|';
+        for (const algebra::Variable& variable : coefficient_matrix | std::views::drop(1) | std::views::keys) { // B
+            res.append(variable.to_latex()).append(" & ");
         }
-        out << format(std::string("MR")) << '|' << std::endl;
-        print_partition();
+        res.append("\\text{MR} \\\\\n\\hline\n");
 
         for (int i = 0; i < size; i++) {
-            out << '|' << format(computational_table.basis_vector[i]) << '|' << std::setw(TAB_SIZE)
-                << format(computational_table.cost.at(computational_table.basis_vector[i])) << '|';
+            res.append(basis_vector[i].to_latex()).append(" & ").append(cost.at(basis_vector[i]).to_latex()).append(" & ");
 
-            for (const std::vector<algebra::Fraction>& fractions : computational_table.coefficient_matrix | std::views::values) {
-                out << format(fractions[i]) << '|';
+            for (const std::vector<algebra::Fraction>& fractions : coefficient_matrix | std::views::values) {
+                res.append(fractions[i].to_latex()).append(" & ");
             }
-            if (!computational_table.mr.empty()) {
-                out << format(computational_table.mr[i] == algebra::inf ? "-ve" : std::to_string(computational_table.mr[i])) << '|';
+            if (!mr.empty()) {
+                res.append(mr[i] == algebra::inf ? "-" : mr[i].to_latex()).append(" & ");
             } else {
-                out << std::setw(TAB_SIZE) << "" << '|';
+                // res.append(optimization::ComputationalTable::TAB_SIZE, ' ').push_back('|');
             }
-            out << std::endl;
+            res.pop_back();
+            res.pop_back();
+            res.append("\\\\\n");
         }
-        print_partition();
-        out << '|';
+        res.append("\\hline\n &  & Z_j - C_j & ");
 
-        for (int i = 0; i < 2; i++) {
-            out << std::setw(TAB_SIZE) << "" << '|';
+        for (const algebra::Polynomial& polynomial : zj_cj) {
+            res.append(polynomial.to_latex()).append(" & ");
         }
-        out << format(std::string("Zj-Cj")) << '|';
-
-        for (const algebra::Polynomial& polynomial : computational_table.zj_cj) {
-            out << format(polynomial) << '|';
-        }
-        out << std::setw(TAB_SIZE) << "" << '|' << std::endl;
-        print_partition();
-        return out << std::endl;
+        return res.append("\\\\\n\\end{array}\n");
     }
 };
+
+namespace std {
+    inline string to_string(const optimization::ComputationalTable& computational_table) {
+        const int size = computational_table.basis_vector.size(), columns = 3 + computational_table.coefficient_matrix.size();
+        auto get_partition = [columns] -> std::string {
+            std::string str("+");
+
+            for (int i = 0; i < columns; i++) {
+                str.append(optimization::ComputationalTable::TAB_SIZE, '-').push_back('+');
+            }
+            return str.append("\n");
+        };
+        auto get_format = [](const auto& value) -> std::string {
+            const std::string str = std::to_string(value);
+            const int remaining = optimization::ComputationalTable::TAB_SIZE - str.size();
+            return std::string(remaining / 2, ' ').append(str).append(remaining - remaining / 2, ' ');
+        };
+        std::string res(" ");
+
+        for (int i = 0; i < 3; i++) {
+            res.append(optimization::ComputationalTable::TAB_SIZE + 1, ' ');
+        }
+        for (const algebra::Variable& variable : computational_table.coefficient_matrix | std::views::drop(1) | std::views::keys) { // B
+            res.append(get_format(computational_table.cost.at(variable))).push_back(' ');
+        }
+        res.append("\n").append(get_partition()).push_back('|');
+
+        for (const std::string string : {"BV", "C", "B"}) {
+            res.append(get_format(string)).push_back('|');
+        }
+        for (const algebra::Variable& variable : computational_table.coefficient_matrix | std::views::drop(1) | std::views::keys) { // B
+            res.append(get_format(variable)).push_back('|');
+        }
+        res.append(get_format(std::string("MR")).append("|\n")).append(get_partition());
+
+        for (int i = 0; i < size; i++) {
+            res.append("|")
+                .append(get_format(computational_table.basis_vector[i]))
+                .append("|")
+                .append(get_format(computational_table.cost.at(computational_table.basis_vector[i])))
+                .push_back('|');
+
+            for (const std::vector<algebra::Fraction>& fractions : computational_table.coefficient_matrix | std::views::values) {
+                res.append(get_format(fractions[i])).push_back('|');
+            }
+            if (!computational_table.mr.empty()) {
+                res.append(get_format(computational_table.mr[i] == algebra::inf ? "-ve" : std::to_string(computational_table.mr[i]))).push_back('|');
+            } else {
+                res.append(optimization::ComputationalTable::TAB_SIZE, ' ').push_back('|');
+            }
+            res.push_back('\n');
+        }
+        res.append(get_partition()).push_back('|');
+
+        for (int i = 0; i < 2; i++) {
+            res.append(optimization::ComputationalTable::TAB_SIZE, ' ').push_back('|');
+        }
+        res.append(get_format(std::string("Zj-Cj"))).push_back('|');
+
+        for (const algebra::Polynomial& polynomial : computational_table.zj_cj) {
+            res.append(get_format(polynomial)).push_back('|');
+        }
+        return res.append(optimization::ComputationalTable::TAB_SIZE, ' ').append("|\n").append(get_partition()).append("\n");
+    }
+} // namespace std
+
+inline std::ostream& optimization::operator<<(std::ostream& out, const ComputationalTable& computational_table) {
+    return out << std::to_string(computational_table);
+}
 
 inline optimization::LPP optimization::LPP::dual(const std::string& basis) const {
     LPP canonical = *this;

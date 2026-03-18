@@ -5,8 +5,6 @@ using namespace algebra;
 using namespace linalg;
 using namespace optimization;
 
-inline static std::ofstream out("output.txt");
-
 void test(LPP&& lpp, const std::string& method = "simplex", const Variable& var = {}, const Matrix<Fraction>& coefficients = {}) {
     if (method == "simplex" || method == "dual") {
         lpp.tabular_optimize(method).get_solutions(method);
@@ -30,17 +28,13 @@ void test(LPP&& lpp, const std::string& method = "simplex", const Variable& var 
     } else {
         auto x = lpp.dual(method);
     }
-    out << std::string(150, '-') << std::endl;
 }
 
-void test(std::vector<Equation>&& equations) {
-    basic_feasible_solutions(equations);
-    out << std::string(150, '-') << std::endl;
-}
+void test(std::vector<Equation>&& equations) { basic_feasible_solutions(equations); }
 
 void test(ComputationalTable&& table, const std::string& method = "simplex", const Variable& var = {}, const Inequation& constraint = {},
           const Matrix<Fraction>& coefficients = {}) {
-    table.optimize_simplex();
+    optimization::GLOBAL_FORMATTING << table << std::endl;
 
     if (method.starts_with("Var")) {
         if (method.ends_with("add") || method.ends_with("remove")) {
@@ -59,19 +53,14 @@ void test(ComputationalTable&& table, const std::string& method = "simplex", con
         }
         table.get_solutions("simplex");
     }
-    out << std::string(150, '-') << std::endl;
 }
 
-void test(IPP&& ipp, const std::string& path) {
-    auto x = ipp.optimize_branch_bound(path);
-    out << std::string(150, '-') << std::endl;
-}
+void test(IPP&& ipp, const std::string& path) { auto x = ipp.optimize_branch_bound(path); }
 
 int main() {
     const Variable x("x"), y("y"), z("z"), x1("x1"), x2("x2"), x3("x3"), x4("x4"), x5("x5"), s1("s1"), s2("s2"), s3("s3");
-    linalg::GLOBAL_FORMATTING = {true, &out};
-    optimization::GLOBAL_FORMATTING = {true, &out};
-
+    // optimization::GLOBAL_FORMATTING.toggle_file("output.txt");
+    // optimization::GLOBAL_FORMATTING.toggle_latex("latex.tex");
     test(LPP(Optimization::MAXIMIZE, 2 * x + 7 * y,
              {
                  3 * x + 5 * y <= 15,
@@ -182,7 +171,6 @@ int main() {
                  x + y <= 5,
              },
              {x >= 0, y >= 0}));
-    // Two Phase Method
     test(LPP(Optimization::MAXIMIZE, -4 * x - y,
              {
                  3 * x + y == 3,
@@ -498,7 +486,6 @@ int main() {
              Solution::OPTIMIZED, {}),
          "Constraint add", {}, 3 * x1 + x2 + 2 * x3 + x4 + 9 * x5 <= 19);
     // Mid Term Examination
-    // one graphical question
     test(LPP(Optimization::MAXIMIZE, 3 * x - 5 * y,
              {
                  4 * x + 3 * y >= 5,
@@ -512,6 +499,13 @@ int main() {
                  2 * x - y <= 40,
              },
              {x >= 0, y >= 0}));
+    test(LPP(Optimization::MAXIMIZE, 5 * x - y,
+             {
+                 3 * x + 5 * y <= 15,
+                 4 * x + 3 * y <= 12,
+             },
+             {x >= 0, y >= 0}),
+         "graphical", Variable("outputs/graph8.png"));
     test(LPP(Optimization::MAXIMIZE, 5 * x - y,
              {
                  3 * x + 5 * y <= 15,
@@ -561,6 +555,7 @@ int main() {
              },
              {x >= 0, y >= 0}),
          "outputs/ipp1");
+    /*
     test(IPP(Optimization::MAXIMIZE, 7 * x + 9 * y,
              {
                  -x + 3 * y <= 6,
@@ -591,6 +586,6 @@ int main() {
              },
              {x >= 0, y >= 0}),
          "outputs/ipp5");
-
+*/
     return 0;
 }
