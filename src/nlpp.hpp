@@ -11,7 +11,7 @@ public:
 
     std::map<algebra::Variable, algebra::Fraction> optimize() const {
         GLOBAL_FORMATTING << *this;
-        const int size = constraints.size();
+        int size = constraints.size();
         algebra::SimplePolynomial lagrange_multiplier = objective;
         std::vector<algebra::Variable> lagrange_variables;
         std::vector<algebra::Equation> equations;
@@ -36,7 +36,28 @@ public:
             }
             seen.emplace(variable.variables[0].name);
         }
-        tensor::solve_linear_system(equations);
-        return {};
+        std::map<algebra::Variable, algebra::Fraction> res = tensor::solve_linear_system(equations);
+
+        auto range = seen | std::views::filter([&lagrange_variables](const algebra::Variable& variable) -> bool {
+                         return !std::ranges::contains(lagrange_variables, variable);
+                     });
+        const std::vector variables(range.begin(), range.end());
+        size = variables.size() + 1;
+        tensor::Matrix<algebra::SimplePolynomial> sufficient(size, size);
+
+        for (int i = 1; i < size; i++) {
+            sufficient[i, 0] = sufficient[0, i] = constraints[0].lhs.differentiate(variables[i - 1]);
+        }
+        for (int i = 1; i < size; i++) {
+            for (int j = 1; j <= i; j++) {
+                sufficient[i, j] = sufficient[j, i] = lagrange_multiplier.differentiate(variables[i - 1]).differentiate(variables[j - 1]);
+            }
+        }
+        std::erase_if(res, [&lagrange_variables](const std::pair<algebra::Variable, algebra::Fraction>& element) -> bool {
+            return std::ranges::contains(lagrange_variables, element.first);
+        });
+        res[Z] = static_cast<algebra::Fraction>(objective.substitute(res));
+        GLOBAL_FORMATTING << sufficient << std::endl << algebra::Equation(Z, res[Z]) << std::endl << std::endl;
+        return res;
     }
 };

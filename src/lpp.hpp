@@ -1,6 +1,8 @@
 #pragma once
 
 class optimization::LPP {
+    static constexpr auto serial_class = detail::SerialClass::LPP;
+
 public:
     Optimization type;
     algebra::SimplePolynomial objective;
@@ -70,7 +72,6 @@ public:
         std::vector<algebra::SimplePolynomial> polynomials;
         std::vector<algebra::Point> points{{0, 0}};
         const std::vector<std::vector<int>> combinations = algebra::detail::generate_combinations(size, 2);
-        graph.source_path = "/home/dream/github/optimization-technique/tensor/algebra/utils/graph.py";
         polynomials.reserve(size);
         GLOBAL_FORMATTING << *this;
 
@@ -96,8 +97,7 @@ public:
         erase_if(points, [](const algebra::Point& point) -> bool { return point.x < 0 || point.y < 0; });
 
         for (const algebra::Point& point : points) {
-            std::vector<std::pair<algebra::Variable, algebra::Fraction>> substituent = {{algebra::Variable("x"), point.x},
-                                                                                        {algebra::Variable("y"), point.y}};
+            std::map<algebra::Variable, algebra::Fraction> substituent = {{algebra::Variable("x"), point.x}, {algebra::Variable("y"), point.y}};
 
             if (point.x >= 0 && point.y >= 0) {
                 limit = std::max({limit, point.x, point.y});
@@ -160,6 +160,48 @@ public:
         return res;
     }
 
+    void serialize(std::ofstream& out) const {
+        out.write(reinterpret_cast<const char*>(&serial_class), sizeof(serial_class));
+        out.write(reinterpret_cast<const char*>(&type), sizeof(type));
+        objective.serialize(out);
+        size_t size = constraints.size();
+        out.write(reinterpret_cast<const char*>(&size), sizeof(size));
+
+        for (const algebra::Inequation& inequation : constraints) {
+            inequation.serialize(out);
+        }
+        size = restrictions.size();
+        out.write(reinterpret_cast<const char*>(&size), sizeof(size));
+
+        for (const algebra::Inequation& restriction : restrictions) {
+            restriction.serialize(out);
+        }
+    }
+
+    static LPP deserialize(std::ifstream& in) {
+        detail::SerialClass type;
+        in.read(reinterpret_cast<char*>(&type), sizeof(type));
+        assert(type == serial_class);
+
+        LPP res;
+        size_t size;
+        in.read(reinterpret_cast<char*>(&res.type), sizeof(res.type));
+        res.objective = algebra::SimplePolynomial::deserialize(in);
+        in.read(reinterpret_cast<char*>(&size), sizeof(size));
+        res.constraints.reserve(size);
+
+        for (int i = 0; i < size; i++) {
+            res.constraints.push_back(algebra::Inequation::deserialize(in));
+        }
+        in.read(reinterpret_cast<char*>(&size), sizeof(size));
+        res.restrictions.reserve(size);
+
+        for (int i = 0; i < size; i++) {
+            res.restrictions.push_back(algebra::Inequation::deserialize(in));
+        }
+        return res;
+    }
+
     ComputationalTable tabular_optimize(const std::string& = "simplex") const;
 
     LPP dual(const std::string& = "w") const;
@@ -168,8 +210,8 @@ public:
 namespace std {
     inline string to_string(const optimization::LPP& lpp) {
         const int size = lpp.restrictions.size();
-        string res(lpp.type == optimization::Optimization::MAXIMIZE ? "Maximize\t" : "Minimize\t");
-        res.append(to_string(lpp.objective)).append("\nsubject to  ").append(to_string(lpp.constraints.front())).push_back('\n');
+        string res(lpp.type == optimization::Optimization::MAXIMIZE ? "Maximize" : "Minimize");
+        res.append("    ").append(to_string(lpp.objective)).append("\nsubject to  ").append(to_string(lpp.constraints.front())).push_back('\n');
 
         for (const algebra::Inequation& constraint : lpp.constraints | std::views::drop(1)) {
             res.append("            ").append(to_string(constraint)).push_back('\n');

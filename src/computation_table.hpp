@@ -1,6 +1,10 @@
 #pragma once
 
 class optimization::ComputationalTable {
+    static constexpr auto serial_class = detail::SerialClass::COMPUTATIONAL_TABLE;
+
+    ComputationalTable() = default;
+
     static algebra::Fraction extract_coefficient_M(const algebra::SimplePolynomial& polynomial) {
         const auto itr = std::ranges::find(polynomial.terms, LPP::M, &algebra::Variable::basis);
 
@@ -419,15 +423,10 @@ public:
     }
 
     void add_constraint(const algebra::Inequation& inequation) {
-        std::vector<std::pair<algebra::Variable, algebra::Fraction>> substituent;
-        const std::map<algebra::Variable, algebra::Fraction> temp =
+        std::map<algebra::Variable, algebra::Fraction> substituent =
             std::get<std::vector<std::map<algebra::Variable, algebra::Fraction>>>(get_solutions())[0];
-        substituent.reserve(cost.size());
         GLOBAL_FORMATTING << *this;
 
-        for (const auto& [key, value] : temp) {
-            substituent.emplace_back(key, value);
-        }
         if (static_cast<bool>(inequation.substitute(substituent))) {
             return;
         }
@@ -437,7 +436,6 @@ public:
         const int size = basis_vector.size() + 1;
         const algebra::Variable slack("s" + std::to_string(*std::ranges::max_element(range) + 1));
         algebra::SimplePolynomial transformation;
-        substituent.resize(size);
         coefficient_matrix[LPP::B].push_back(static_cast<algebra::Fraction>(inequation.rhs));
 
         for (const algebra::Variable& variable : inequation.lhs.terms) {
@@ -448,10 +446,9 @@ public:
             }
         }
         for (algebra::Variable& variable : transformation.terms) {
-            const int idx = std::ranges::find(basis_vector, variable.basis()) - basis_vector.begin();
-            const std::string name = "R" + std::to_string(idx + 1);
-            variable = algebra::Variable(variable.coefficient, name);
-            substituent[idx] = {name, 0};
+            const algebra::Variable var("R" + std::to_string(std::ranges::find(basis_vector, variable.basis()) - basis_vector.begin() + 1));
+            substituent[var] = 0;
+            variable.variables = std::move(var.variables);
         }
         for (std::vector<algebra::Fraction>& fractions : coefficient_matrix | std::views::values) {
             if (fractions.size() < size) {
@@ -465,7 +462,7 @@ public:
 
         for (std::vector<algebra::Fraction>& fractions : coefficient_matrix | std::views::values) {
             for (int i = 0; i < size - 1; i++) {
-                substituent[i].second = fractions[i];
+                substituent[basis_vector[i]] = fractions[i];
             }
             fractions.back() -= static_cast<algebra::Fraction>(transformation.substitute(substituent));
         }
@@ -511,12 +508,105 @@ public:
             res.pop_back();
             res.append("\\\\\n");
         }
-        res.append("\\hline\n &  & Z_j - C_j & ");
+        res.append("\\hline\n &  & Z_j-C_j & ");
 
         for (const algebra::SimplePolynomial& polynomial : zj_cj) {
             res.append(polynomial.to_latex()).append(" & ");
         }
         return res.append("\\\\\n\\end{array}\n");
+    }
+
+    void serialize(std::ofstream& out) const {
+        out.write(reinterpret_cast<const char*>(&serial_class), sizeof(serial_class));
+        lpp.serialize(out);
+        out.write(reinterpret_cast<const char*>(&solution), sizeof(solution));
+        size_t size = basis_vector.size();
+        out.write(reinterpret_cast<const char*>(&size), sizeof(size));
+
+        for (const algebra::Variable& variable : basis_vector) {
+            variable.serialize(out);
+        }
+        size = cost.size();
+        out.write(reinterpret_cast<const char*>(&size), sizeof(size));
+
+        for (const auto& [variable, value] : cost) {
+            variable.serialize(out);
+            value.serialize(out);
+        }
+        size = coefficient_matrix.size();
+        out.write(reinterpret_cast<const char*>(&size), sizeof(size));
+
+        for (const auto& [variable, fractions] : coefficient_matrix) {
+            variable.serialize(out);
+
+            size = fractions.size();
+            out.write(reinterpret_cast<const char*>(&size), sizeof(size));
+
+            for (const algebra::Fraction& fraction : fractions) {
+                fraction.serialize(out);
+            }
+        }
+        size = zj_cj.size();
+        out.write(reinterpret_cast<const char*>(&size), sizeof(size));
+
+        for (const algebra::SimplePolynomial& polynomial : zj_cj) {
+            polynomial.serialize(out);
+        }
+        size = mr.size();
+        out.write(reinterpret_cast<const char*>(&size), sizeof(size));
+
+        for (const algebra::Fraction& fraction : mr) {
+            fraction.serialize(out);
+        }
+    }
+
+    static ComputationalTable deserialize(std::ifstream& in) {
+        detail::SerialClass type;
+        in.read(reinterpret_cast<char*>(&type), sizeof(type));
+        assert(type == serial_class);
+
+        ComputationalTable res;
+        size_t size, len;
+        res.lpp = LPP::deserialize(in);
+        in.read(reinterpret_cast<char*>(&res.solution), sizeof(res.solution));
+        in.read(reinterpret_cast<char*>(&size), sizeof(size));
+        res.basis_vector.reserve(size);
+
+        for (int i = 0; i < size; i++) {
+            res.basis_vector.push_back(algebra::Variable::deserialize(in));
+        }
+        in.read(reinterpret_cast<char*>(&size), sizeof(size));
+
+        for (int i = 0; i < size; i++) {
+            algebra::Variable variable = algebra::Variable::deserialize(in), value = algebra::Variable::deserialize(in);
+            res.cost.emplace(variable, value);
+        }
+        in.read(reinterpret_cast<char*>(&size), sizeof(size));
+
+        for (int i = 0; i < size; i++) {
+            algebra::Variable variable = algebra::Variable::deserialize(in);
+            std::vector<algebra::Fraction> fractions;
+            in.read(reinterpret_cast<char*>(&len), sizeof(len));
+            fractions.reserve(len);
+
+            for (int j = 0; j < len; j++) {
+                fractions.push_back(algebra::Fraction::deserialize(in));
+            }
+            res.coefficient_matrix.emplace(variable, fractions);
+        }
+        in.read(reinterpret_cast<char*>(&size), sizeof(size));
+        res.zj_cj.reserve(size);
+
+        for (int i = 0; i < size; i++) {
+            res.zj_cj.push_back(algebra::SimplePolynomial::deserialize(in));
+        }
+        in.read(reinterpret_cast<char*>(&size), sizeof(size));
+        res.mr.reserve(size);
+
+        for (int i = 0; i < size; i++) {
+            res.mr.push_back(algebra::Fraction::deserialize(in));
+        }
+        return res;
     }
 };
 

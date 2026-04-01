@@ -1,5 +1,4 @@
 #pragma once
-#include <filesystem>
 #include <iomanip>
 #include <queue>
 #include "tensor/tensor.hpp"
@@ -20,6 +19,10 @@ namespace optimization {
     class NLPP;
 
     std::vector<std::map<algebra::Variable, algebra::Fraction>> basic_feasible_solutions(const std::vector<algebra::Equation>&);
+
+    namespace detail {
+        enum class SerialClass : uint8_t { LPP, COMPUTATIONAL_TABLE };
+    }
 } // namespace optimization
 
 #include "src/lpp.hpp"
