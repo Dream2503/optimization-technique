@@ -1,7 +1,12 @@
 #pragma once
 
 class optimization::NLPP : public LPP {
-    std::tuple<algebra::SimplePolynomial, std::vector<algebra::Variable>, std::vector<algebra::Equation>, int> lagrange_multiplier() const {
+public:
+    enum class Method : uint8_t { LAGRANGE, KKT, WOLFS };
+    using LPP::LPP;
+
+    std::tuple<algebra::SimplePolynomial, std::vector<algebra::Variable>, std::vector<algebra::Equation>, int>
+    lagrange_multiplier(const Method method) const {
         const int size = constraints.size();
         algebra::SimplePolynomial multiplier = objective;
         std::vector<algebra::Variable> variables;
@@ -11,14 +16,21 @@ class optimization::NLPP : public LPP {
 
         for (int i = 0; i < size; i++) {
             variables.emplace_back("L" + std::to_string(i + 1));
-            multiplier -= variables.back() * constraints[i].lhs;
+            multiplier -= variables.back() * (constraints[i].lhs - constraints[i].rhs);
         }
         GLOBAL_FORMATTING << (algebra::Variable("L") == multiplier) << std::endl;
 
         for (const algebra::Variable& variable :
-             std::array{objective.terms, variables} | std::views::join | std::views::filter([&seen](const algebra::Variable& var) -> bool {
-                 return !var.is_fraction() && !seen.contains(var.variables[0].name);
-             })) {
+             std::array{objective.terms, variables,
+                        method == Method::WOLFS
+                            ? constraints | std::views::transform([](const algebra::Inequation& constraint) -> std::vector<algebra::Variable> {
+                                  return constraint.lhs.terms;
+                              }) |
+                                std::views::join | std::ranges::to<std::vector>()
+                            : std::vector<algebra::Variable>()} |
+                 std::views::join | std::views::filter([&seen](const algebra::Variable& var) -> bool {
+                     return !var.is_fraction() && !seen.contains(var.variables[0].name);
+                 })) {
             equations.push_back(multiplier.differentiate(variable.variables[0].name) == 0);
             const auto itr = std::ranges::find_if(equations.back().lhs.terms, [](const algebra::Variable& var) -> bool { return var.is_fraction(); });
 
@@ -34,27 +46,27 @@ class optimization::NLPP : public LPP {
         return {multiplier, variables, equations, seen.size()};
     }
 
-public:
-    NLPP(const Optimization type, const algebra::SimplePolynomial& objective, const std::vector<algebra::Inequation>& constraints,
-         const std::vector<algebra::Inequation>& restrictions) : LPP(type, objective, constraints, restrictions) {}
-
-    NLPP standardize() const {
+    NLPP standardize(const Method method) const {
         NLPP nlpp = *this;
         int i = 1;
         GLOBAL_FORMATTING << nlpp << std::endl;
+        nlpp.constraints.clear();
 
-        for (algebra::Inequation& constraint : nlpp.constraints) {
+        for (const algebra::Inequation& constraint :
+             std::array{constraints, method == Method::WOLFS ? restrictions : std::vector<algebra::Inequation>()} | std::views::join) {
             if (static_cast<algebra::Fraction>(constraint.rhs) < 0) {
-                constraint = constraint.invert();
+                nlpp.constraints.push_back(constraint.invert());
+            } else {
+                nlpp.constraints.push_back(constraint);
             }
-            if (constraint.opr != algebra::RelationalOperator::EQ) {
+            if (nlpp.constraints.back().opr != algebra::RelationalOperator::EQ) {
                 algebra::Variable variable("s" + std::to_string(i++));
-                constraint = type == Optimization::MAXIMIZE && constraint.opr == algebra::RelationalOperator::GE ||
+                nlpp.constraints.back() = type == Optimization::MAXIMIZE && constraint.opr == algebra::RelationalOperator::GE ||
                         type == Optimization::MINIMIZE && constraint.opr == algebra::RelationalOperator::LE
-                    ? constraint.invert()
-                    : constraint;
-                constraint.lhs += variable ^ 2;
-                constraint.opr = algebra::RelationalOperator::EQ;
+                    ? nlpp.constraints.back().invert()
+                    : nlpp.constraints.back();
+                nlpp.constraints.back().lhs += variable ^ 2;
+                nlpp.constraints.back().opr = algebra::RelationalOperator::EQ;
             }
         }
         GLOBAL_FORMATTING << "Standard Form:" << std::endl << nlpp << std::endl;
@@ -76,7 +88,7 @@ public:
         for (algebra::Inequation& constraint : temp_nlpp.constraints) {
             constraint -= constraint.rhs;
         }
-        const auto [multiplier, variables, equations, size] = temp_nlpp.lagrange_multiplier();
+        const auto [multiplier, variables, equations, size] = temp_nlpp.lagrange_multiplier(Method::LAGRANGE);
         std::map<algebra::Variable, algebra::Fraction> res = tensor::solve_linear_system(equations);
         tensor::Matrix<algebra::Fraction> sufficient(size, size);
         std::vector<uint8_t> signs;
@@ -127,8 +139,8 @@ public:
     }
 
     std::map<algebra::Variable, algebra::Fraction> kkt_conditions() const {
-        const NLPP standard = standardize();
-        auto [multiplier, variables, equations, size] = standard.lagrange_multiplier();
+        const NLPP standard = standardize(Method::KKT);
+        auto [multiplier, variables, equations, size] = standard.lagrange_multiplier(Method::KKT);
         const int cases = constraints.size();
         std::map<algebra::Variable, algebra::Fraction> substituent;
         std::vector<algebra::Inequation> lagrange_constraints;
@@ -160,6 +172,10 @@ public:
             }
             GLOBAL_FORMATTING << std::endl;
             std::map<algebra::Variable, algebra::Fraction> res = tensor::solve_linear_system(temp_equations);
+
+            if (res.empty()) {
+                continue;
+            }
             GLOBAL_FORMATTING << std::endl;
             res.insert(substituent.begin(), substituent.end());
 

@@ -17,6 +17,7 @@ namespace optimization {
 
     class IPP;
     class NLPP;
+    class QPP;
 
     std::vector<std::map<algebra::Variable, algebra::Fraction>> basic_feasible_solutions(const std::vector<algebra::Equation>&);
 
@@ -29,3 +30,4 @@ namespace optimization {
 #include "src/computation_table.hpp"
 #include "src/ipp.hpp"
 #include "src/nlpp.hpp"
+#include "src/qpp.hpp"
