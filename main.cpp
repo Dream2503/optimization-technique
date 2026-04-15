@@ -5,12 +5,14 @@ using namespace tensor;
 using namespace optimization;
 
 void test(LPP&& lpp, const std::string& method = "simplex", const Variable& var = {}, const Matrix<Fraction>& coefficients = {}) {
-    if (method == "simplex" || method == "dual") {
-        lpp.tabular_optimize(method).get_solutions(method);
+    if (method == "simplex" || method == "two phase") {
+        auto x = lpp.tabular_optimize(LPP::Method::SIMPLEX, method == "two phase" ? LPP::ArtificialMethod::TWO_PHASE : LPP::ArtificialMethod::BIG_M);
+    } else if (method == "dual") {
+        auto x = lpp.tabular_optimize(LPP::Method::DUAL_SIMPLEX);
     } else if (method.starts_with("Var")) {
         lpp = lpp.standardize();
         ComputationalTable table(lpp);
-        table.optimize_simplex();
+        table.optimize();
 
         if (method.ends_with("add") || method.ends_with("remove")) {
             if (method.ends_with("add")) {
@@ -18,7 +20,7 @@ void test(LPP&& lpp, const std::string& method = "simplex", const Variable& var 
             } else {
                 table.remove_variable(var);
             }
-            table.get_solutions("simplex");
+            table.get_solutions(LPP::Method::SIMPLEX);
         } else {
             method.ends_with('C') ? table.cost_variation() : table.RHS_variation();
         }
@@ -42,7 +44,7 @@ void test(ComputationalTable&& table, const std::string& method = "simplex", con
             } else {
                 table.remove_variable(var);
             }
-            table.get_solutions("simplex");
+            table.get_solutions(LPP::Method::SIMPLEX);
         } else {
             method.ends_with('C') ? table.cost_variation() : table.RHS_variation();
         }
@@ -50,7 +52,7 @@ void test(ComputationalTable&& table, const std::string& method = "simplex", con
         if (method.ends_with("add")) {
             table.add_constraint(constraint);
         }
-        table.get_solutions("simplex");
+        table.get_solutions(LPP::Method::SIMPLEX);
     }
 }
 
@@ -76,7 +78,7 @@ void test(QPP&& qpp) {
 
 int main() {
     const Variable x("x"), y("y"), z("z"), x1("x1"), x2("x2"), x3("x3"), x4("x4"), x5("x5"), s1("s1"), s2("s2"), s3("s3");
-    optimization::GLOBAL_FORMATTING.toggle_file("output.txt");
+    // optimization::GLOBAL_FORMATTING.toggle_file("output.txt");
     // optimization::GLOBAL_FORMATTING.toggle_latex("latex.tex");
     test(LPP(Optimization::MAXIMIZE, 2 * x + 7 * y,
              {
@@ -194,7 +196,8 @@ int main() {
                  4 * x + 3 * y >= 6,
                  x + 2 * y <= 3,
              },
-             {x >= 0, y >= 0}));
+             {x >= 0, y >= 0}),
+         "two phase");
     test(LPP(Optimization::MAXIMIZE, 3 * x1 + 2 * x2 + x3,
              {
                  -3 * x1 + 2 * x2 + 2 * x3 == 8,
@@ -655,6 +658,12 @@ int main() {
              {
                  x1 + 4 * x2 <= 4,
                  x1 + x2 <= 2,
+             },
+             {x1 >= 0, x2 >= 0}));
+    test(QPP(Optimization::MAXIMIZE, +2 * x1 + x2 - (x1 ^ 2),
+             {
+                 2 * x1 + 3 * x2 <= 6,
+                 2 * x1 + x2 <= 4,
              },
              {x1 >= 0, x2 >= 0}));
     return 0;

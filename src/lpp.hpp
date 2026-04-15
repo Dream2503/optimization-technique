@@ -4,6 +4,8 @@ class optimization::LPP {
     static constexpr auto serial_class = detail::SerialClass::LPP;
 
 public:
+    enum class Method : bool { SIMPLEX, DUAL_SIMPLEX };
+    enum class ArtificialMethod : bool { BIG_M, TWO_PHASE };
     Optimization type;
     algebra::SimplePolynomial objective;
     std::vector<algebra::Inequation> constraints, restrictions;
@@ -17,7 +19,7 @@ public:
         const std::vector<algebra::Inequation>& restrictions) :
         type(type), objective(objective), constraints(constraints), restrictions(restrictions) {} // need to add variables integrity check
 
-    LPP standardize(const bool dual = false) const {
+    LPP standardize(const Method method = Method::SIMPLEX) const {
         LPP lpp = *this;
         int i = 1;
         GLOBAL_FORMATTING << lpp;
@@ -27,7 +29,8 @@ public:
             lpp.type = Optimization::MAXIMIZE;
         }
         for (algebra::Inequation& constraint : lpp.constraints) {
-            if (dual && constraint.opr == algebra::RelationalOperator::GE || !dual && static_cast<algebra::Fraction>(constraint.rhs) < 0) {
+            if (method == Method::DUAL_SIMPLEX && constraint.opr == algebra::RelationalOperator::GE ||
+                method == Method::SIMPLEX && static_cast<algebra::Fraction>(constraint.rhs) < 0) {
                 constraint = constraint.invert();
             }
             if (constraint.opr != algebra::RelationalOperator::EQ) {
@@ -202,7 +205,9 @@ public:
         return res;
     }
 
-    ComputationalTable tabular_optimize(const std::string& = "simplex") const;
+    std::variant<std::vector<std::map<algebra::Variable, algebra::Fraction>>, Solution>
+    tabular_optimize(Method = Method::SIMPLEX, ArtificialMethod = ArtificialMethod::BIG_M,
+                     const std::map<algebra::Variable, algebra::Variable>& = {}) const;
 
     LPP dual(const std::string& = "w") const;
 };
