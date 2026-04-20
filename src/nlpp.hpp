@@ -65,7 +65,7 @@ public:
                         type == Optimization::MINIMIZE && constraint.opr == algebra::RelationalOperator::LE
                     ? nlpp.constraints.back().invert()
                     : nlpp.constraints.back();
-                nlpp.constraints.back().lhs += variable ^ 2;
+                nlpp.constraints.back().lhs += type == Optimization::MINIMIZE ? -(variable ^ 2) : (variable ^ 2);
                 nlpp.constraints.back().opr = algebra::RelationalOperator::EQ;
             }
         }

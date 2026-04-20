@@ -63,9 +63,12 @@ public:
     std::vector<algebra::Fraction> mr;
     static constexpr int TAB_SIZE = 13;
 
-    explicit ComputationalTable(const LPP& lpp) : lpp(lpp), solution(Solution::UNOPTIMIZED) {
+    ComputationalTable(const LPP& lpp) : ComputationalTable(std::move(lpp), lpp.type) {}
+
+    ComputationalTable(const LPP&& lpp, const Optimization type) : lpp(lpp), solution(Solution::UNOPTIMIZED) {
         const int size = lpp.constraints.size();
         const auto unit_matrix = tensor::Matrix<algebra::Fraction>::make_identity(size);
+        this->lpp.type = type;
 
         for (const algebra::Variable& variable : lpp.objective.terms) {
             cost.emplace(algebra::Variable(variable.variables[0].name), variable.coefficient);
@@ -263,10 +266,10 @@ public:
                 if (complementary_slack.empty()) {
                     ev = std::next(coefficient_matrix.begin(), std::ranges::min_element(zj_cj, {}, extract_coefficient_M) - zj_cj.begin() + 1); // B
                 } else {
-                    auto x = (std::views::zip(cost | std::views::keys, zj_cj | std::views::transform(extract_coefficient_M)) |
-                              std::views::transform([](auto&& element) -> std::pair<algebra::Variable, algebra::Fraction> {
-                                  return std::pair{std::get<0>(element), std::get<1>(element)};
-                              })) |
+                    auto x = std::views::zip(cost | std::views::keys, zj_cj | std::views::transform(extract_coefficient_M)) |
+                        std::views::transform([](auto&& element) -> std::pair<algebra::Variable, algebra::Fraction> {
+                                 return std::pair{std::get<0>(element), std::get<1>(element)};
+                             }) |
                         std::ranges::to<std::vector>();
                     std::ranges::sort(x, {}, &std::pair<algebra::Variable, algebra::Fraction>::second);
                     ev = coefficient_matrix.find(*std::ranges::begin(
@@ -775,10 +778,10 @@ optimization::LPP::tabular_optimize(const Method method, const ArtificialMethod 
                                     const std::map<algebra::Variable, algebra::Variable>& complementary_slack) const {
     switch (method) {
     case Method::SIMPLEX:
-        return ComputationalTable(standardize()).get_solutions(method, artificial_method, complementary_slack);
+        return ComputationalTable(standardize(method), type).get_solutions(method, artificial_method, complementary_slack);
 
     case Method::DUAL_SIMPLEX:
-        return ComputationalTable(canonicalize().standardize(method)).get_solutions(method);
+        return ComputationalTable(canonicalize().standardize(method), type).get_solutions(method);
     }
     std::unreachable();
 }

@@ -79,7 +79,7 @@ void test(QPP&& qpp) {
 int main() {
     const Variable x("x"), y("y"), z("z"), x1("x1"), x2("x2"), x3("x3"), x4("x4"), x5("x5"), s1("s1"), s2("s2"), s3("s3");
     // optimization::GLOBAL_FORMATTING.toggle_file("output.txt");
-    // optimization::GLOBAL_FORMATTING.toggle_latex("latex.tex");
+    optimization::GLOBAL_FORMATTING.toggle_latex("latex.tex");
     test(LPP(Optimization::MAXIMIZE, 2 * x + 7 * y,
              {
                  3 * x + 5 * y <= 15,
@@ -660,7 +660,7 @@ int main() {
                  x1 + x2 <= 2,
              },
              {x1 >= 0, x2 >= 0}));
-    test(QPP(Optimization::MAXIMIZE, +2 * x1 + x2 - (x1 ^ 2),
+    test(QPP(Optimization::MINIMIZE, -2 * x1 - x2 + (x1 ^ 2),
              {
                  2 * x1 + 3 * x2 <= 6,
                  2 * x1 + x2 <= 4,
