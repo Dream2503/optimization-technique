@@ -46,7 +46,7 @@ public:
             }
         }
         for (const auto& [variable, fraction] : res) {
-            GLOBAL_FORMATTING << algebra::Equation(variable, fraction) << "  ";
+            GLOBAL_FORMATTING << algebra::Equation(variable, fraction) << std::endl;
         }
         return res;
     }

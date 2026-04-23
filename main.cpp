@@ -62,7 +62,7 @@ void test(NLPP&& nlpp) {
     auto res = nlpp.optimize();
 
     for (const auto& [variable, fraction] : res) {
-        optimization::GLOBAL_FORMATTING << Equation(variable, fraction) << "  ";
+        optimization::GLOBAL_FORMATTING << Equation(variable, fraction) << std::endl;
     }
     optimization::GLOBAL_FORMATTING << std::endl;
 }
@@ -79,7 +79,8 @@ void test(QPP&& qpp) {
 int main() {
     const Variable x("x"), y("y"), z("z"), x1("x1"), x2("x2"), x3("x3"), x4("x4"), x5("x5"), s1("s1"), s2("s2"), s3("s3");
     // optimization::GLOBAL_FORMATTING.toggle_file("output.txt");
-    optimization::GLOBAL_FORMATTING.toggle_latex("latex.tex");
+    // optimization::GLOBAL_FORMATTING.toggle_latex("latex.tex");
+    optimization::GLOBAL_FORMATTING.toggle_html("output.html");
     test(LPP(Optimization::MAXIMIZE, 2 * x + 7 * y,
              {
                  3 * x + 5 * y <= 15,

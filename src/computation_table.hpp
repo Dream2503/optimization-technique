@@ -134,7 +134,7 @@ public:
                 const int idx = std::ranges::find(basis_vector, variable) - basis_vector.begin();
                 substituent[variable] = res[variable] = idx < size ? coefficient_matrix[LPP::B][idx] : 0;
             }
-            GLOBAL_FORMATTING << *this;
+            GLOBAL_FORMATTING << *this << std::flush;
             res[LPP::Z] = static_cast<algebra::Fraction>(lpp.objective.substitute(substituent));
             res[LPP::Z] *= lpp.type == Optimization::MINIMIZE ? -1 : 1;
             return res;
@@ -177,7 +177,7 @@ public:
         }
         for (const std::map<algebra::Variable, algebra::Fraction>& sol : res) {
             for (const auto& [variable, fraction] : sol) {
-                GLOBAL_FORMATTING << algebra::Equation(variable, fraction) << "  ";
+                GLOBAL_FORMATTING << algebra::Equation(variable, fraction) << std::endl;
             }
             GLOBAL_FORMATTING << std::endl;
         }
@@ -545,8 +545,6 @@ public:
             }
             if (!mr.empty()) {
                 res.append(mr[i] == algebra::inf ? "-" : mr[i].to_latex()).append(" & ");
-            } else {
-                // res.append(optimization::ComputationalTable::TAB_SIZE, ' ').push_back('|');
             }
             res.pop_back();
             res.pop_back();
@@ -558,6 +556,43 @@ public:
             res.append(polynomial.to_latex()).append(" & ");
         }
         return res.append("\\\\\n\\end{array}\n");
+    }
+
+    std::string to_html() const {
+        const int size = basis_vector.size(), columns = 3 + coefficient_matrix.size();
+        std::string res("<table style='border-collapse: collapse; margin-left: auto; margin-right: auto;'><style>td:first-child { border-left: none; "
+                        "} td { padding: 8px 15px;text-align: center;border-left: 1px solid black; }</style><tr><td></td><td></td><td></td>");
+
+        for (const algebra::Variable& variable : coefficient_matrix | std::views::drop(1) | std::views::keys) { // B
+            res.append("<td>").append(cost.at(variable).to_html()).append("</td>");
+        }
+        res.append("<td></td></tr><tr style='border-top: 1px solid black; border-bottom: 1px solid black;'><td>BV</td><td>C</td><td>B</td>");
+
+        for (const algebra::Variable& variable : coefficient_matrix | std::views::drop(1) | std::views::keys) { // B
+            res.append("<td><math>").append(variable.to_html()).append("</math></td>");
+        }
+        res.append("<td>MR</td></tr>");
+
+        for (int i = 0; i < size; i++) {
+            res.append(i == size - 1 ? "<tr style='border-bottom: 1px solid black;'><td><math>" : "<tr><td><math>")
+                .append(basis_vector[i].to_html())
+                .append("</math></td><td><math>")
+                .append(cost.at(basis_vector[i]).to_html())
+                .append("</math></td>");
+
+            for (const std::vector<algebra::Fraction>& fractions : coefficient_matrix | std::views::values) {
+                res.append("<td><math>").append(fractions[i].to_html()).append("</math></td>");
+            }
+            if (!mr.empty()) {
+                res.append("<td><math>").append(mr[i] == algebra::inf ? "<mo>&ndash;</mo>" : mr[i].to_html()).append("</math></td>");
+            }
+        }
+        res.append("<tr><td></td><td></td><td><math><msub><mi>Z</mi><mi>j</mi></msub><mo>-</mo><msub><mi>C</mi><mi>j</mi></msub></math></td>");
+
+        for (const algebra::SimplePolynomial& polynomial : zj_cj) {
+            res.append("<td><math>").append(polynomial.to_html()).append("</math></td>");
+        }
+        return res.append("<td></td></table>");
     }
 
     void serialize(std::ofstream& out) const {

@@ -163,6 +163,34 @@ public:
         return res;
     }
 
+    std::string to_html() const {
+        const int size = restrictions.size();
+        std::string res("<mtable><mtr><mtd><mtext>");
+        res.append(type == Optimization::MAXIMIZE ? "Maximize" : "Minimize")
+            .append("</mtext></mtd><mtd>")
+            .append(objective.to_html())
+            .append("</mtd></mtr><mtr><mtd><mtext>subject to</mtext></mtd><mtd>")
+            .append(constraints.front().to_html())
+            .append("</mtd></mtr>");
+
+        for (const algebra::Inequation& constraint : constraints | std::views::drop(1)) {
+            res.append("<mtr><mtd></mtd><mtd>").append(constraint.to_html()).append("</mtd></mtr>");
+        }
+        res.append("<mtr><mtd></mtd><mtd>");
+
+        for (int i = 0; i < size; i++) {
+            if (static_cast<algebra::Fraction>(restrictions[i].rhs) == algebra::inf) {
+                res.append(restrictions[i].lhs.to_html()).append("<mspace width='0.5em'/><mtext>is unrestricted</mtext>");
+            } else {
+                res.append(restrictions[i].to_html());
+            }
+            if (i < size - 1) {
+                res.append("<mo>,</mo><mspace width='0.5em'/>");
+            }
+        }
+        return res.append("</mtd></mtr></mtable>");
+    }
+
     void serialize(std::ofstream& out) const {
         out.write(reinterpret_cast<const char*>(&serial_class), sizeof(serial_class));
         out.write(reinterpret_cast<const char*>(&type), sizeof(type));
